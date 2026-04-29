@@ -45,5 +45,5 @@ fclean: clean
 # Rebuild everything from scratch
 re: fclean all
 
-# Prevent conflicts with files of the same name [cite: 23, 24, 81]
+# Prevent conflicts with files of the same name 
 .PHONY: all clean fclean re
