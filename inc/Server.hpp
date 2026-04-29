@@ -11,12 +11,14 @@
 #include <poll.h>
 #include <unistd.h>
 #include <vector>
+#include "Client.hpp"
 
 class Server {
     private:
         int                         _port;
         std::string                 _password;
         int                         _serverFd;
+        std::map<int, Client*>      _clients;
         std::vector<struct pollfd>  _fds; // Array for poll() 
 
     public:
@@ -25,6 +27,7 @@ class Server {
 
         void init();
         void run();
+        void removeClient(int fd);
         void acceptNewClient();
         void receiveData(int fd);
 };

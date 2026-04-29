@@ -9,7 +9,7 @@ Server::~Server() {
 }
 
 void Server::init() {
-    // 1. Create the socket (IPv4, TCP) [cite: 108]
+    // 1. Create the socket (IPv4, TCP)
     _serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (_serverFd < 0) throw std::runtime_error("Failed to create socket");
 
@@ -17,7 +17,7 @@ void Server::init() {
     int opt = 1;
     setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // 3. Set to non-blocking [cite: 99, 132, 134]
+    // 3. Set to non-blocking
     fcntl(_serverFd, F_SETFL, O_NONBLOCK);
 
     // 4. Bind to port
@@ -42,7 +42,7 @@ void Server::init() {
 
 void Server::run() {
     while (true) { // Use your global g_stop here normally
-        // Wait for events [cite: 92, 100]
+        // Wait for events
         if (poll(&_fds[0], _fds.size(), -1) < 0) break;
 
         for (size_t i = 0; i < _fds.size(); i++) {
@@ -62,7 +62,8 @@ void Server::acceptNewClient() {
     int fd = accept(_serverFd, (struct sockaddr *)&clientAddr, &addrLen);
     
     if (fd != -1) {
-        fcntl(fd, F_SETFL, O_NONBLOCK); // Clients must also be non-blocking [cite: 132]
+        fcntl(fd, F_SETFL, O_NONBLOCK);
+        _clients[fd] = new Client(fd);
         struct pollfd clientPollFd;
         clientPollFd.fd = fd;
         clientPollFd.events = POLLIN;
@@ -71,17 +72,56 @@ void Server::acceptNewClient() {
     }
 }
 
+void Server::removeClient(int fd) {
+    // 1. Find and remove from the pollfd vector
+    for (std::vector<struct pollfd>::iterator it = _fds.begin(); it != _fds.end(); ++it) {
+        if (it->fd == fd) {
+            _fds.erase(it);
+            break;
+        }
+    }
+
+    // 2. Close the socket
+    close(fd);
+
+    // 3. Delete the Client object and remove from map
+    if (_clients.count(fd)) {
+        delete _clients[fd]; // Free memory
+        _clients.erase(fd);  // Remove key from map
+    }
+    
+    std::cout << "Client " << fd << " has been fully removed." << std::endl;
+}
+
 void Server::receiveData(int fd) {
     char buffer[1024];
     int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
     if (bytes <= 0) {
-        std::cout << "Client disconnected." << std::endl;
-        close(fd);
-        // Logic to remove from _fds vector needed here
+        std::cout << "Client " << fd << " disconnected." << std::endl;
+        removeClient(fd); // Proper cleanup
     } else {
         buffer[bytes] = '\0';
-        std::cout << "Received: " << buffer << std::endl;
-        // Parsing of commands will go here
+        _clients[fd]->appendBuffer(buffer);
+
+        // Process all complete commands in the buffer
+        while (_clients[fd]->hasCommand()) {
+            std::string msg = _clients[fd]->getBuffer();
+            size_t pos = msg.find('\n');
+            std::string command = msg.substr(0, pos);
+            
+            // Clean the buffer for the next command
+            _clients[fd]->appendBuffer(""); // This is a placeholder logic
+            // In reality: store the rest of the string back in buffer
+            
+            std::cout << "Executing command from " << fd << ": " << command << std::endl;
+            
+            // NEXT STEP: parserCommand(command, fd);
+            
+            // Real buffer management:
+            std::string remaining = msg.substr(pos + 1);
+            _clients[fd]->clearBuffer();
+            _clients[fd]->appendBuffer(remaining);
+        }
     }
 }
