@@ -1,6 +1,8 @@
 #include "Server.hpp"
 #include <errno.h>
 
+extern bool g_stop;
+
 Server::Server(int port, std::string password) : _port(port), _password(password), _serverFd(-1) {}
 
 Server::~Server() {
@@ -41,16 +43,19 @@ void Server::init() {
 }
 
 void Server::run() {
-    while (true) { // Use your global g_stop here normally
-        // Wait for events
-        if (poll(&_fds[0], _fds.size(), -1) < 0) break;
+    while (g_stop == false) { // g_stop is toggled by SIGINT (Ctrl+C) [cite: 81]
+        // poll() blocks until an event occurs on a monitored socket.
+        // It returns the number of descriptors ready for I/O. 
+        if (poll(&_fds[0], _fds.size(), -1) < 0 && g_stop == false)
+            throw std::runtime_error("poll() failed");
 
         for (size_t i = 0; i < _fds.size(); i++) {
+            // Check if POLLIN event occurred (data is ready to be read)
             if (_fds[i].revents & POLLIN) {
                 if (_fds[i].fd == _serverFd)
-                    acceptNewClient();
+                    acceptNewClient(); // New connection on the listener socket [cite: 81, 100]
                 else
-                    receiveData(_fds[i].fd);
+                    receiveData(_fds[i].fd); // Existing client sent a message [cite: 81, 100]
             }
         }
     }
@@ -59,16 +64,24 @@ void Server::run() {
 void Server::acceptNewClient() {
     struct sockaddr_in clientAddr;
     socklen_t addrLen = sizeof(clientAddr);
+    
+    // accept() extracts the first connection request from the queue [cite: 81]
     int fd = accept(_serverFd, (struct sockaddr *)&clientAddr, &addrLen);
     
     if (fd != -1) {
+        // MANDATORY: All I/O operations must be non-blocking 
         fcntl(fd, F_SETFL, O_NONBLOCK);
-        _clients[fd] = new Client(fd);
+        
+        // Store the new client in our map to keep track of its data [cite: 142]
+        _clients[fd] = new Client(fd); 
+
+        // Add the new socket to poll()'s monitoring list [cite: 100]
         struct pollfd clientPollFd;
         clientPollFd.fd = fd;
         clientPollFd.events = POLLIN;
         _fds.push_back(clientPollFd);
-        std::cout << "New client connected!" << std::endl;
+        
+        std::cout << "New client connected on FD " << fd << std::endl;
     }
 }
 
