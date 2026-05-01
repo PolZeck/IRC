@@ -36,6 +36,9 @@ void Server::processCommand(int fd, std::string command) {
     else if (!_clients[fd]->isPasswordOk()) {
         sendResponse(fd, "451 :You have not registered\r\n");
     }
+    else {
+        sendResponse(fd, "421 :Unknown command\r\n");
+    }
 }
 
 // Fonction utilitaire pour envoyer du texte au client
