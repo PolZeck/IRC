@@ -13,14 +13,12 @@ Server::~Server() {
 void Server::processCommand(int fd, std::string command) {
     if (command.empty()) return;
 
-    // 1. Split basique pour isoler le premier mot (la commande)
     size_t spacePos = command.find(' ');
     std::string cmdName = command.substr(0, spacePos);
     std::string args = (spacePos != std::string::npos) ? command.substr(spacePos + 1) : "";
 
     std::cout << "Client " << fd << " sent command: [" << cmdName << "] with args: [" << args << "]" << std::endl;
 
-    // 2. Routage vers les fonctions (Exemple avec PASS)
     if (cmdName == "PASS") {
         if (args == _password) {
             _clients[fd]->setPasswordOk(true);
@@ -30,9 +28,13 @@ void Server::processCommand(int fd, std::string command) {
         }
     }
     else if (cmdName == "NICK") {
-        // Logique pour NICK...
+        if (args.empty()) {
+            sendResponse(fd, "431 :No nickname given\r\n");
+            return;
+        }
+        _clients[fd]->setNickname(args);
+        std::cout << "Client " << fd << " is now known as " << args << std::endl;
     }
-    // Si le client n'est pas authentifié, on ignore le reste
     else if (!_clients[fd]->isPasswordOk()) {
         sendResponse(fd, "451 :You have not registered\r\n");
     }

@@ -27,6 +27,9 @@ class Client {
         
         std::string getBuffer() const { return _buffer; }
         void        clearBuffer() { _buffer.clear(); }
+
+        bool isRegistered() const { return _isRegistered; }
+        void setRegistered(bool state) { _isRegistered = state; }
         
         // Concatenate new raw data to the existing buffer [cite: 142]
         void appendBuffer(std::string str) { _buffer += str; }
