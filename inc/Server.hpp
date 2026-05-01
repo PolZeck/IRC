@@ -32,6 +32,8 @@ class Server {
         void removeClient(int fd);
         void acceptNewClient();
         void receiveData(int fd);
+        void handlePrivmsg(int fd, std::string args);
+
 
         void handleJoin(int fd, std::string args);
 

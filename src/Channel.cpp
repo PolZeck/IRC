@@ -1,6 +1,6 @@
 #include "Channel.hpp"
-#include <sys/socket.h> // Pour send()
-#include <unistd.h>     // Pour les fonctions système si besoin
+#include <sys/socket.h>
+#include <unistd.h>     
 
 Channel::Channel(std::string name) : _name(name) {}
 

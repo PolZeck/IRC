@@ -56,6 +56,13 @@ void Server::processCommand(int fd, std::string command) {
             handleJoin(fd, args);
         }
     }
+    else if (cmdName == "PRIVMSG") {
+        if (!_clients[fd]->isRegistered()) {
+            sendResponse(fd, "451 :You have not registered\r\n");
+        } else {
+            handlePrivmsg(fd, args);
+        }
+    }
     else if (cmdName == "NICK") {
         if (args.empty()) {
             sendResponse(fd, "431 :No nickname given\r\n");
@@ -77,6 +84,51 @@ void Server::sendResponse(int fd, std::string response) {
     send(fd, response.c_str(), response.length(), 0);
 }
 
+void Server::handlePrivmsg(int fd, std::string args) {
+    size_t sep = args.find(':');
+    if (sep == std::string::npos || args.empty()) {
+        sendResponse(fd, "412 :No text to send\r\n");
+        return;
+    }
+
+    std::string target = args.substr(0, sep);
+    // On retire les espaces superflus à la fin de la cible
+    size_t lastSpace = target.find_last_not_of(" ");
+    if (lastSpace != std::string::npos)
+        target = target.substr(0, lastSpace + 1);
+
+    std::string text = args.substr(sep); // Garde le ':' pour le formatage IRC
+    std::string sender = _clients[fd]->getNickname();
+    
+    // Format du message : :Pseudo!User@Host PRIVMSG cible :message
+    std::string fullMsg = ":" + sender + " PRIVMSG " + target + " " + text + "\r\n";
+
+    // CAS 1 : Envoi à un Channel
+    if (target[0] == '#') {
+        if (_channels.find(target) != _channels.end()) {
+            // On broadcast à tout le monde SAUF à l'émetteur
+            _channels[target]->broadcast(fullMsg, fd);
+        } else {
+            sendResponse(fd, "403 " + target + " :No such channel\r\n");
+        }
+    }
+    // CAS 2 : Envoi à un Utilisateur (Private Message)
+    else {
+        int targetFd = -1;
+        // On cherche le FD correspondant au Nickname
+        for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+            if (it->second->getNickname() == target) {
+                targetFd = it->first;
+                break;
+            }
+        }
+        if (targetFd != -1) {
+            sendResponse(targetFd, fullMsg);
+        } else {
+            sendResponse(fd, "401 " + target + " :No such nick/channel\r\n");
+        }
+    }
+}
 void Server::init() {
     // 1. Create the socket (IPv4, TCP)
     _serverFd = socket(AF_INET, SOCK_STREAM, 0);
