@@ -24,6 +24,7 @@ class Client {
         
         void setNickname(std::string nick) { _nickname = nick; }
         std::string getNickname() const { return _nickname; }
+        int getFd() const { return _fd; }
         
         std::string getBuffer() const { return _buffer; }
         void        clearBuffer() { _buffer.clear(); }

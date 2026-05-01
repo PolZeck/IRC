@@ -49,6 +49,13 @@ void Server::processCommand(int fd, std::string command) {
             std::cout << "Client " << fd << " is now fully registered." << std::endl;
         }
     }
+    else if (cmdName == "JOIN") {
+        if (!_clients[fd]->isRegistered()) {
+            sendResponse(fd, "451 :You have not registered\r\n");
+        } else {
+            handleJoin(fd, args);
+        }
+    }
     else if (cmdName == "NICK") {
         if (args.empty()) {
             sendResponse(fd, "431 :No nickname given\r\n");
@@ -100,6 +107,27 @@ void Server::init() {
     serverPollFd.fd = _serverFd;
     serverPollFd.events = POLLIN;
     _fds.push_back(serverPollFd);
+}
+
+void Server::handleJoin(int fd, std::string args) {
+    if (args.empty() || args[0] != '#') {
+        sendResponse(fd, "461 JOIN :Not enough parameters or invalid channel name\r\n");
+        return;
+    }
+
+    std::string channelName = args;
+    if (_channels.find(channelName) == _channels.end()) {
+        _channels[channelName] = new Channel(channelName);
+        std::cout << "Server: Created new channel " << channelName << std::endl;
+    }
+
+    _channels[channelName]->addClient(_clients[fd]);
+
+    std::string joinMsg = ":" + _clients[fd]->getNickname() + " JOIN " + channelName + "\r\n";
+    
+    _channels[channelName]->broadcast(joinMsg);
+    
+    std::cout << "Client " << _clients[fd]->getNickname() << " joined " << channelName << std::endl;
 }
 
 void Server::run() {
