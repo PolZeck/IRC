@@ -27,6 +27,28 @@ void Server::processCommand(int fd, std::string command) {
             sendResponse(fd, "464 :Password incorrect\r\n");
         }
     }
+    else if (cmdName == "USER") {
+        if (!_clients[fd]->isPasswordOk()) {
+            sendResponse(fd, "451 :You have not registered (PASS required)\r\n");
+            return;
+        }
+        if (_clients[fd]->isRegistered()) {
+            sendResponse(fd, "462 :Unauthorized command (already registered)\r\n");
+            return;
+        }
+        
+        if (args.empty()) {
+            sendResponse(fd, "461 USER :Not enough parameters\r\n");
+        } else {
+            _clients[fd]->setRegistered(true);
+            std::string nick = _clients[fd]->getNickname();
+            
+            std::string welcome = "001 " + nick + " :Welcome to the IRC Network, " + nick + "\r\n";
+            sendResponse(fd, welcome);
+            
+            std::cout << "Client " << fd << " is now fully registered." << std::endl;
+        }
+    }
     else if (cmdName == "NICK") {
         if (args.empty()) {
             sendResponse(fd, "431 :No nickname given\r\n");
