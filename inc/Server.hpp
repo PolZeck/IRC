@@ -19,7 +19,7 @@ class Server {
         std::string                 _password;
         int                         _serverFd;
         std::map<int, Client*>      _clients;
-        std::vector<struct pollfd>  _fds; // Array for poll() 
+        std::vector<struct pollfd>  _fds; // Array for poll()
 
     public:
         Server(int port, std::string password);
@@ -30,6 +30,9 @@ class Server {
         void removeClient(int fd);
         void acceptNewClient();
         void receiveData(int fd);
+
+        void processCommand(int fd, std::string command);
+        void sendResponse(int fd, std::string response);
 };
 
 #endif

@@ -10,6 +10,39 @@ Server::~Server() {
         close(_fds[i].fd);
 }
 
+void Server::processCommand(int fd, std::string command) {
+    if (command.empty()) return;
+
+    // 1. Split basique pour isoler le premier mot (la commande)
+    size_t spacePos = command.find(' ');
+    std::string cmdName = command.substr(0, spacePos);
+    std::string args = (spacePos != std::string::npos) ? command.substr(spacePos + 1) : "";
+
+    std::cout << "Client " << fd << " sent command: [" << cmdName << "] with args: [" << args << "]" << std::endl;
+
+    // 2. Routage vers les fonctions (Exemple avec PASS)
+    if (cmdName == "PASS") {
+        if (args == _password) {
+            _clients[fd]->setPasswordOk(true);
+            std::cout << "Client " << fd << " password correct." << std::endl;
+        } else {
+            sendResponse(fd, "464 :Password incorrect\r\n");
+        }
+    }
+    else if (cmdName == "NICK") {
+        // Logique pour NICK...
+    }
+    // Si le client n'est pas authentifié, on ignore le reste
+    else if (!_clients[fd]->isPasswordOk()) {
+        sendResponse(fd, "451 :You have not registered\r\n");
+    }
+}
+
+// Fonction utilitaire pour envoyer du texte au client
+void Server::sendResponse(int fd, std::string response) {
+    send(fd, response.c_str(), response.length(), 0);
+}
+
 void Server::init() {
     // 1. Create the socket (IPv4, TCP)
     _serverFd = socket(AF_INET, SOCK_STREAM, 0);
@@ -111,28 +144,26 @@ void Server::receiveData(int fd) {
     int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
     if (bytes <= 0) {
-        std::cout << "Client " << fd << " disconnected." << std::endl;
-        removeClient(fd); // Proper cleanup
+        removeClient(fd);
     } else {
         buffer[bytes] = '\0';
         _clients[fd]->appendBuffer(buffer);
 
-        // Process all complete commands in the buffer
         while (_clients[fd]->hasCommand()) {
-            std::string msg = _clients[fd]->getBuffer();
-            size_t pos = msg.find('\n');
-            std::string command = msg.substr(0, pos);
-            
-            // Clean the buffer for the next command
-            _clients[fd]->appendBuffer(""); // This is a placeholder logic
-            // In reality: store the rest of the string back in buffer
-            
-            std::cout << "Executing command from " << fd << ": " << command << std::endl;
-            
-            // NEXT STEP: parserCommand(command, fd);
-            
-            // Real buffer management:
-            std::string remaining = msg.substr(pos + 1);
+            // 1. On récupère la commande brute
+            std::string fullCommand = _clients[fd]->getBuffer();
+            size_t pos = fullCommand.find('\n');
+            std::string command = fullCommand.substr(0, pos);
+
+            // 2. On nettoie les \r (pour la compatibilité Windows/IRC)
+            if (!command.empty() && command[command.size() - 1] == '\r')
+                command.erase(command.size() - 1);
+
+            // 3. ICI ON APPELLE LE CERVEAU
+            this->processCommand(fd, command);
+
+            // 4. On nettoie le buffer pour la suite
+            std::string remaining = fullCommand.substr(pos + 1);
             _clients[fd]->clearBuffer();
             _clients[fd]->appendBuffer(remaining);
         }

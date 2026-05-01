@@ -10,9 +10,20 @@ class Client {
         int         _fd;
         std::string _buffer; // Accumulates data until a full command (\n) is received 
         
+        bool _passwordOk;
+        bool _isRegistered;
+        std::string _nickname;
 
     public:
-        Client(int fd) : _fd(fd) {}
+        // Client(int fd) : _fd(fd) {}
+
+        Client(int fd) : _fd(fd), _passwordOk(false), _isRegistered(false) {}
+    
+        void setPasswordOk(bool state) { _passwordOk = state; }
+        bool isPasswordOk() const { return _passwordOk; }
+        
+        void setNickname(std::string nick) { _nickname = nick; }
+        std::string getNickname() const { return _nickname; }
         
         std::string getBuffer() const { return _buffer; }
         void        clearBuffer() { _buffer.clear(); }
