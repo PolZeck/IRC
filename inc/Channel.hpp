@@ -16,7 +16,9 @@ public:
 
     std::string getName() const;
     void        addClient(Client* client);
-    void        removeClient(int fd);
+    void        removeClient(Client* client);
+    bool        hasClient(Client* client);
+    bool        isEmpty() const;
     void        broadcast(std::string message, int excludeFd = -1);
     
     const std::vector<Client*>& getClients() const;

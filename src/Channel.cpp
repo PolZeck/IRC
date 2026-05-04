@@ -21,3 +21,24 @@ void Channel::broadcast(std::string message, int excludeFd) {
 }
 
 const std::vector<Client*>& Channel::getClients() const { return _clients; }
+
+void Channel::removeClient(Client* client) {
+    for (std::vector<Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+        if ((*it)->getFd() == client->getFd()) {
+            _clients.erase(it);
+            break;
+        }
+    }
+}
+
+bool Channel::hasClient(Client* client) {
+    for (size_t i = 0; i < _clients.size(); i++) {
+        if (_clients[i]->getFd() == client->getFd())
+            return true;
+    }
+    return false;
+}
+
+bool Channel::isEmpty() const {
+    return _clients.empty();
+}

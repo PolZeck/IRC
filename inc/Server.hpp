@@ -34,7 +34,10 @@ class Server {
         void handlePrivmsg(int fd, std::string args);
         void handlePass(int fd, std::string args);
         void handleUser(int fd, std::string args);
-
+        void handlePart(int fd, std::string args);
+        void handleQuit(int fd, std::string args);
+        void handleKick(int fd, std::string args);
+        Client* findClientByNick(std::string nick);
     public:
         Server(int port, std::string password);
         ~Server();

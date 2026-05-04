@@ -12,7 +12,8 @@ OBJ_DIR     := obj
 
 # Source files list (add more as the project grows)
 SRC_FILES   :=	main.cpp Server.cpp Channel.cpp \
-				commands/Join.cpp commands/Nick.cpp commands/Pass.cpp commands/Privmsg.cpp commands/User.cpp
+				commands/Join.cpp commands/Nick.cpp commands/Pass.cpp commands/Privmsg.cpp commands/User.cpp \
+				commands/Kick.cpp commands/Part.cpp commands/Quit.cpp
 SRC         := $(addprefix $(SRC_DIR)/, $(SRC_FILES))
 OBJ         := $(addprefix $(OBJ_DIR)/, $(SRC_FILES:.cpp=.o))
 DEP         := $(OBJ:.o=.d)

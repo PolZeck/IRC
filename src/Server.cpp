@@ -28,12 +28,14 @@ Server::~Server() {
 }
 
 void Server::initCommands() {
-    // Registering all the IRC commands I've implemented so far
     _commandMap["PASS"]    = &Server::handlePass;
     _commandMap["NICK"]    = &Server::handleNick;
     _commandMap["USER"]    = &Server::handleUser;
     _commandMap["JOIN"]    = &Server::handleJoin;
     _commandMap["PRIVMSG"] = &Server::handlePrivmsg;
+    _commandMap["PART"]    = &Server::handlePart;
+    _commandMap["QUIT"]    = &Server::handleQuit;
+    _commandMap["KICK"]    = &Server::handleKick;
 }
 
 void Server::processCommand(int fd, std::string command) {
@@ -110,6 +112,14 @@ void Server::run() {
             }
         }
     }
+}
+
+Client* Server::findClientByNick(std::string nick) {
+    for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+        if (it->second->getNickname() == nick)
+            return it->second;
+    }
+    return NULL;
 }
 
 void Server::acceptNewClient() {
