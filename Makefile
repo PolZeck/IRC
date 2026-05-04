@@ -11,7 +11,8 @@ SRC_DIR     := src
 OBJ_DIR     := obj
 
 # Source files list (add more as the project grows)
-SRC_FILES   := main.cpp Server.cpp Channel.cpp
+SRC_FILES   :=	main.cpp Server.cpp Channel.cpp \
+				commands/Join.cpp commands/Nick.cpp commands/Pass.cpp commands/Privmsg.cpp commands/User.cpp
 SRC         := $(addprefix $(SRC_DIR)/, $(SRC_FILES))
 OBJ         := $(addprefix $(OBJ_DIR)/, $(SRC_FILES:.cpp=.o))
 DEP         := $(OBJ:.o=.d)
@@ -23,9 +24,9 @@ all: $(NAME)
 $(NAME): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $(NAME)
 
-# Compile .cpp files to .o with dependency generation (.d files)
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+$(OBJ_DIR)/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iinc -MMD -MP -c $< -o $@
 
 # Create object directory if it doesn't exist
 $(OBJ_DIR):
