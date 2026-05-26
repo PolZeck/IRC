@@ -28,14 +28,17 @@ Server::~Server() {
 }
 
 void Server::initCommands() {
-    _commandMap["PASS"]    = &Server::handlePass;
-    _commandMap["NICK"]    = &Server::handleNick;
-    _commandMap["USER"]    = &Server::handleUser;
-    _commandMap["JOIN"]    = &Server::handleJoin;
-    _commandMap["PRIVMSG"] = &Server::handlePrivmsg;
-    _commandMap["PART"]    = &Server::handlePart;
-    _commandMap["QUIT"]    = &Server::handleQuit;
-    _commandMap["KICK"]    = &Server::handleKick;
+    _commandMap["PASS"]     = &Server::handlePass;
+    _commandMap["NICK"]     = &Server::handleNick;
+    _commandMap["USER"]     = &Server::handleUser;
+    _commandMap["JOIN"]     = &Server::handleJoin;
+    _commandMap["PRIVMSG"]  = &Server::handlePrivmsg;
+    _commandMap["PART"]     = &Server::handlePart;
+    _commandMap["QUIT"]     = &Server::handleQuit;
+    _commandMap["KICK"]     = &Server::handleKick;
+    _commandMap["TOPIC"]  = &Server::handleTopic;
+    _commandMap["INVITE"] = &Server::handleInvite;
+    _commandMap["MODE"]   = &Server::handleMode;
 }
 
 void Server::processCommand(int fd, std::string command) {
@@ -140,19 +143,30 @@ void Server::acceptNewClient() {
 }
 
 void Server::removeClient(int fd) {
-    // I remove them from my poll list first
+    Client* client = _clients[fd];
+
+    // 1. Le retirer de tous les channels d'abord !
+    std::map<std::string, Channel*>::iterator it = _channels.begin();
+    while (it != _channels.end()) {
+        if (it->second->hasClient(client)) {
+            it->second->removeClient(client);
+        }
+        ++it;
+    }
+
+    // 2. Nettoyer les structures de Server
     for (std::vector<struct pollfd>::iterator it = _fds.begin(); it != _fds.end(); ++it) {
         if (it->fd == fd) {
             _fds.erase(it);
             break;
         }
     }
+
+    // 3. Supprimer l'objet et fermer le FD
+    _clients.erase(fd);
+    delete client;
     close(fd);
-    // I delete their data and remove them from my map
-    if (_clients.count(fd)) {
-        delete _clients[fd];
-        _clients.erase(fd);
-    }
+    std::cout << "Client FD " << fd << " removed safely." << std::endl;
 }
 
 void Server::receiveData(int fd) {

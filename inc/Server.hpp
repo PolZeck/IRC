@@ -37,6 +37,9 @@ class Server {
         void handlePart(int fd, std::string args);
         void handleQuit(int fd, std::string args);
         void handleKick(int fd, std::string args);
+        void handleTopic(int fd, std::string args);
+        void handleInvite(int fd, std::string args);
+        void handleMode(int fd, std::string args);
         Client* findClientByNick(std::string nick);
     public:
         Server(int port, std::string password);

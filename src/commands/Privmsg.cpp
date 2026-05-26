@@ -25,11 +25,16 @@ void Server::handlePrivmsg(int fd, std::string args) {
     // Scenario 1: Sending to a channel
     if (target[0] == '#') {
         if (_channels.count(target)) {
+            if (!_channels[target]->hasClient(_clients[fd])) {
+                sendResponse(fd, "404 " + target + " :Cannot send to channel\r\n");
+                return;
+            }
+            // ------------------------------------------
             _channels[target]->broadcast(fullMsg, fd);
         } else {
             sendResponse(fd, "403 " + target + " :No such channel\r\n");
-        }
     }
+}
     // Scenario 2: Sending a private message to a specific user
     else {
         int targetFd = -1;

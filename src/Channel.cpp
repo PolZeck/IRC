@@ -1,26 +1,16 @@
 #include "Channel.hpp"
-#include <sys/socket.h>
-#include <unistd.h>     
 
-Channel::Channel(std::string name) : _name(name) {}
+Channel::Channel(std::string name) : _name(name), _topic(""), _key(""), _maxClients(0), _modeI(false), _modeT(false) {}
 
 Channel::~Channel() {}
 
-std::string Channel::getName() const { return _name; }
-
 void Channel::addClient(Client* client) {
     _clients.push_back(client);
-}
-
-void Channel::broadcast(std::string message, int excludeFd) {
-    for (size_t i = 0; i < _clients.size(); i++) {
-        if (_clients[i]->getFd() != excludeFd) {
-            send(_clients[i]->getFd(), message.c_str(), message.length(), 0);
-        }
+    // Le tout premier qui rejoint le canal devient automatiquement opérateur
+    if (_clients.size() == 1) {
+        addOperator(client->getFd());
     }
 }
-
-const std::vector<Client*>& Channel::getClients() const { return _clients; }
 
 void Channel::removeClient(Client* client) {
     for (std::vector<Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
@@ -29,16 +19,41 @@ void Channel::removeClient(Client* client) {
             break;
         }
     }
+    removeOperator(client->getFd());
 }
 
 bool Channel::hasClient(Client* client) {
     for (size_t i = 0; i < _clients.size(); i++) {
-        if (_clients[i]->getFd() == client->getFd())
-            return true;
+        if (_clients[i]->getFd() == client->getFd()) return true;
     }
     return false;
 }
 
-bool Channel::isEmpty() const {
-    return _clients.empty();
+void Channel::addOperator(int fd) {
+    if (!isOperator(fd)) _operators.push_back(fd);
+}
+
+void Channel::removeOperator(int fd) {
+    std::vector<int>::iterator it = std::find(_operators.begin(), _operators.end(), fd);
+    if (it != _operators.end()) _operators.erase(it);
+}
+
+bool Channel::isOperator(int fd) {
+    return std::find(_operators.begin(), _operators.end(), fd) != _operators.end();
+}
+
+void Channel::addInvite(int fd) {
+    if (!isInvited(fd)) _invitedFds.push_back(fd);
+}
+
+bool Channel::isInvited(int fd) {
+    return std::find(_invitedFds.begin(), _invitedFds.end(), fd) != _invitedFds.end();
+}
+
+void Channel::broadcast(std::string message, int excludeFd) {
+    for (size_t i = 0; i < _clients.size(); i++) {
+        if (_clients[i]->getFd() != excludeFd) {
+            send(_clients[i]->getFd(), message.c_str(), message.length(), 0);
+        }
+    }
 }
