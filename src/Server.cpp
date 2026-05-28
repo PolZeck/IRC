@@ -8,21 +8,20 @@
 
 extern bool g_stop;
 
-Server::Server(int port, std::string password) : _port(port), _password(password), _serverFd(-1) {
-    // Mapping my commands right at the start so the dispatcher is ready
-    initCommands(); 
+Server::Server(int port, std::string password)
+    : _port(port), _password(password), _serverFd(-1)
+{
+    initCommands();
 }
 
-Server::~Server() {
-    // Cleaning up my client objects to avoid memory leaks
+Server::~Server()
+{
     for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it)
         delete it->second;
-    
-    // Cleaning up my channel objects
+
     for (std::map<std::string, Channel*>::iterator it = _channels.begin(); it != _channels.end(); ++it)
         delete it->second;
 
-    // Closing all active sockets
     for (size_t i = 0; i < _fds.size(); i++)
         close(_fds[i].fd);
 }
@@ -47,21 +46,23 @@ void Server::processCommand(int fd, std::string command) {
     // I split the incoming string into command name and arguments
     size_t spacePos = command.find(' ');
     std::string cmdName = command.substr(0, spacePos);
-    std::string args = (spacePos != std::string::npos) ? command.substr(spacePos + 1) : "";
+    std::string args;
+
+    if (spacePos != std::string::npos)
+        args = command.substr(spacePos + 1);
+    else
+        args = "";
 
     std::cout << "Client " << fd << " sent: [" << cmdName << "]" << std::endl;
 
-    // Using my map to call the right function instead of a giant if/else block
-    if (_commandMap.count(cmdName)) {
+    if (_commandMap.count(cmdName))
         (this->*_commandMap[cmdName])(fd, args);
-    } else {
-        // If I haven't coded the command yet, I send an 'Unknown command' error
+    else
         sendResponse(fd, "421 " + cmdName + " :Unknown command\r\n");
-    }
 }
 
-void Server::sendResponse(int fd, std::string response) {
-    // Simple wrapper to send raw data to a specific socket
+void Server::sendResponse(int fd, std::string response)
+{
     send(fd, response.c_str(), response.length(), 0);
 }
 
@@ -69,16 +70,15 @@ void Server::sendResponse(int fd, std::string response) {
 /* NETWORK ENGINE                                                             */
 /* ========================================================================== */
 
-void Server::init() {
-    // Creating my main listener socket
+void Server::init()
+{
     _serverFd = socket(AF_INET, SOCK_STREAM, 0);
-    if (_serverFd < 0) throw std::runtime_error("Failed to create socket");
+    if (_serverFd < 0)
+        throw std::runtime_error("Failed to create socket");
 
-    // Setting SO_REUSEADDR so I don't have to wait for the port to clear after a crash
     int opt = 1;
     setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    
-    // I must set the server socket to non-blocking as per the subject
+
     fcntl(_serverFd, F_SETFL, O_NONBLOCK);
 
     struct sockaddr_in address;
@@ -92,52 +92,74 @@ void Server::init() {
     if (listen(_serverFd, 10) < 0)
         throw std::runtime_error("Listen failed");
 
-    // Adding my listener to the poll list
     struct pollfd serverPollFd;
     serverPollFd.fd = _serverFd;
     serverPollFd.events = POLLIN;
+    serverPollFd.revents = 0;
+
     _fds.push_back(serverPollFd);
 }
 
-void Server::run() {
-    // Main loop: I keep running until g_stop is true (Ctrl+C)
-    while (g_stop == false) {
-        // I wait for poll to tell me which sockets have data waiting
-        if (poll(&_fds[0], _fds.size(), -1) < 0 && g_stop == false)
-            break;
+void Server::run()
+{
+    while (g_stop == false)
+    {
+        int pollResult = poll(&_fds[0], _fds.size(), -1);
 
-        for (size_t i = 0; i < _fds.size(); i++) {
-            if (_fds[i].revents & POLLIN) {
-                if (_fds[i].fd == _serverFd)
-                    acceptNewClient(); // New connection arriving
+        if (pollResult < 0)
+        {
+            if (g_stop == false)
+                break;
+            continue;
+        }
+
+        for (size_t i = 0; i < _fds.size(); i++)
+        {
+            int currentFd = _fds[i].fd;
+            short currentRevents = _fds[i].revents;
+
+            if (currentRevents & POLLIN)
+            {
+                if (currentFd == _serverFd)
+                    acceptNewClient();
                 else
-                    receiveData(_fds[i].fd); // Existing client sending data
+                {
+                    receiveData(currentFd);
+                    if (i > 0 && i < _fds.size() && _fds[i].fd != currentFd)
+                        i--;
+                }
             }
         }
     }
 }
 
-Client* Server::findClientByNick(std::string nick) {
-    for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+Client* Server::findClientByNick(std::string nick)
+{
+    for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+    {
         if (it->second->getNickname() == nick)
             return it->second;
     }
     return NULL;
 }
 
-void Server::acceptNewClient() {
+void Server::acceptNewClient()
+{
     struct sockaddr_in clientAddr;
     socklen_t addrLen = sizeof(clientAddr);
     int fd = accept(_serverFd, (struct sockaddr *)&clientAddr, &addrLen);
-    
-    if (fd != -1) {
-        // I make sure every new client is non-blocking too
+
+    if (fd != -1)
+    {
         fcntl(fd, F_SETFL, O_NONBLOCK);
-        _clients[fd] = new Client(fd); 
-        
+
+        _clients[fd] = new Client(fd);
+
         struct pollfd clientPollFd;
         clientPollFd.fd = fd;
         clientPollFd.events = POLLIN;
+        clientPollFd.revents = 0;
+
         _fds.push_back(clientPollFd);
     }
 }
@@ -169,34 +191,36 @@ void Server::removeClient(int fd) {
     std::cout << "Client FD " << fd << " removed safely." << std::endl;
 }
 
-void Server::receiveData(int fd) {
+void Server::receiveData(int fd)
+{
     char buffer[1024];
     int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
-    if (bytes <= 0) {
-        // Client disconnected or error
+    if (bytes <= 0)
+    {
         removeClient(fd);
-    } else {
-        buffer[bytes] = '\0';
-        _clients[fd]->appendBuffer(buffer);
+        return;
+    }
 
-        // I process every complete command found in my buffer
-        while (_clients[fd]->hasCommand()) {
-            std::string fullCommand = _clients[fd]->getBuffer();
-            size_t pos = fullCommand.find('\n');
-            std::string command = fullCommand.substr(0, pos);
+    buffer[bytes] = '\0';
+    _clients[fd]->appendBuffer(buffer);
 
-            // Removing \r if it exists for clean string handling
-            if (!command.empty() && command[command.size() - 1] == '\r')
-                command.erase(command.size() - 1);
+    while (_clients.count(fd) && _clients[fd]->hasCommand())
+    {
+        std::string fullCommand = _clients[fd]->getBuffer();
+        size_t pos = fullCommand.find('\n');
+        std::string command = fullCommand.substr(0, pos);
 
-            // Dispatching the command
-            this->processCommand(fd, command);
+        if (!command.empty() && command[command.size() - 1] == '\r')
+            command.erase(command.size() - 1);
 
-            // Moving the rest of the data forward in my buffer
-            std::string remaining = fullCommand.substr(pos + 1);
-            _clients[fd]->clearBuffer();
-            _clients[fd]->appendBuffer(remaining);
-        }
+        processCommand(fd, command);
+
+        if (!_clients.count(fd))
+            return;
+
+        std::string remaining = fullCommand.substr(pos + 1);
+        _clients[fd]->clearBuffer();
+        _clients[fd]->appendBuffer(remaining);
     }
 }
