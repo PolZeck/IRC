@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <string.h>
 #include <map>        // I need this for my CommandMap!
 #include <stdexcept>
 #include <sys/socket.h>
@@ -51,8 +52,9 @@ class Server {
         
         // My socket management
         void acceptNewClient();
-        void receiveData(int fd);
+        bool receiveData(int fd);
         void removeClient(int fd);
+        void handlePing(int fd, std::string args);
 
         // Communication and parsing
         void processCommand(int fd, std::string command);

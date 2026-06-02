@@ -35,9 +35,10 @@ void Server::initCommands() {
     _commandMap["PART"]     = &Server::handlePart;
     _commandMap["QUIT"]     = &Server::handleQuit;
     _commandMap["KICK"]     = &Server::handleKick;
-    _commandMap["TOPIC"]  = &Server::handleTopic;
-    _commandMap["INVITE"] = &Server::handleInvite;
-    _commandMap["MODE"]   = &Server::handleMode;
+    _commandMap["TOPIC"]    = &Server::handleTopic;
+    _commandMap["INVITE"]   = &Server::handleInvite;
+    _commandMap["MODE"]     = &Server::handleMode;
+    _commandMap["PING"]     = &Server::handlePing;
 }
 
 void Server::processCommand(int fd, std::string command) {
@@ -100,6 +101,10 @@ void Server::init()
     _fds.push_back(serverPollFd);
 }
 
+/* ========================================================================== */
+/* NETWORK ENGINE (VERSION SÉCURISÉE)                                         */
+/* ========================================================================== */
+
 void Server::run()
 {
     while (g_stop == false)
@@ -115,22 +120,72 @@ void Server::run()
 
         for (size_t i = 0; i < _fds.size(); i++)
         {
-            int currentFd = _fds[i].fd;
-            short currentRevents = _fds[i].revents;
-
-            if (currentRevents & POLLIN)
+            if (_fds[i].revents & POLLIN)
             {
-                if (currentFd == _serverFd)
+                if (_fds[i].fd == _serverFd)
+                {
                     acceptNewClient();
+                }
                 else
                 {
-                    receiveData(currentFd);
-                    if (i > 0 && i < _fds.size() && _fds[i].fd != currentFd)
+                    if (receiveData(_fds[i].fd) == false)
+                    {
                         i--;
+                    }
                 }
             }
         }
     }
+}
+
+void Server::handlePing(int fd, std::string args) {
+    if (args.empty()) {
+        sendResponse(fd, "461 PING :Not enough parameters\r\n");
+        return;
+    }
+    sendResponse(fd, "PONG " + args + "\r\n");
+}
+
+
+bool Server::receiveData(int fd)
+{
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
+    int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
+
+    if (bytes <= 0)
+    {
+        removeClient(fd);
+        return false; // Le client n'existe plus
+    }
+
+    buffer[bytes] = '\0';
+    _clients[fd]->appendBuffer(buffer);
+
+    // Boucle sécurisée pour le traitement des commandes en rafale
+    while (_clients.count(fd) && _clients[fd]->hasCommand())
+    {
+        std::string fullCommand = _clients[fd]->getBuffer();
+        size_t pos = fullCommand.find('\n');
+        if (pos == std::string::npos) break;
+
+        std::string command = fullCommand.substr(0, pos);
+
+        if (!command.empty() && command[command.size() - 1] == '\r')
+            command.erase(command.size() - 1);
+
+        processCommand(fd, command);
+
+        // Si le processCommand a provoqué une déconnexion (ex: QUIT)
+        if (!_clients.count(fd))
+            return false;
+
+        // Mise à jour correcte du buffer pour la prochaine itération du while
+        std::string remaining = fullCommand.substr(pos + 1);
+        _clients[fd]->clearBuffer();
+        _clients[fd]->appendBuffer(remaining);
+    }
+    return true; // Le client est toujours actif
 }
 
 Client* Server::findClientByNick(std::string nick)
@@ -167,7 +222,6 @@ void Server::acceptNewClient()
 void Server::removeClient(int fd) {
     Client* client = _clients[fd];
 
-    // 1. Le retirer de tous les channels d'abord !
     std::map<std::string, Channel*>::iterator it = _channels.begin();
     while (it != _channels.end()) {
         if (it->second->hasClient(client)) {
@@ -189,38 +243,4 @@ void Server::removeClient(int fd) {
     delete client;
     close(fd);
     std::cout << "Client FD " << fd << " removed safely." << std::endl;
-}
-
-void Server::receiveData(int fd)
-{
-    char buffer[1024];
-    int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
-
-    if (bytes <= 0)
-    {
-        removeClient(fd);
-        return;
-    }
-
-    buffer[bytes] = '\0';
-    _clients[fd]->appendBuffer(buffer);
-
-    while (_clients.count(fd) && _clients[fd]->hasCommand())
-    {
-        std::string fullCommand = _clients[fd]->getBuffer();
-        size_t pos = fullCommand.find('\n');
-        std::string command = fullCommand.substr(0, pos);
-
-        if (!command.empty() && command[command.size() - 1] == '\r')
-            command.erase(command.size() - 1);
-
-        processCommand(fd, command);
-
-        if (!_clients.count(fd))
-            return;
-
-        std::string remaining = fullCommand.substr(pos + 1);
-        _clients[fd]->clearBuffer();
-        _clients[fd]->appendBuffer(remaining);
-    }
 }
