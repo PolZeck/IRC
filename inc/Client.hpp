@@ -43,10 +43,17 @@ class Client {
         // Extraction logic: returns the first full command found in the buffer [cite: 142]
         std::string extractNextCommand() {
             size_t pos = _buffer.find('\n');
-            std::string cmd = _buffer.substr(0, pos); // Get everything before \n
-            _buffer.erase(0, pos + 1);                // Remove the extracted part from buffer
-            return cmd;
+            if (pos == std::string::npos) {
+                return "";
+            }
+            std::string cmd = _buffer.substr(0, pos);
+            _buffer.erase(0, pos + 1);
+            if (!cmd.empty() && cmd[cmd.size() - 1] == '\r') {
+                cmd.erase(cmd.size() - 1);
         }
+
+        return cmd;
+    }
 };
 
 #endif
