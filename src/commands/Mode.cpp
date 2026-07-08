@@ -9,10 +9,10 @@ void Server::handleMode(int fd, std::string args) {
     }
 
     std::stringstream ss(args);
-    std::string target, modeString, param;
+    std::string target, modeString;
     ss >> target >> modeString;
 
-    // If it's a nickname mode request, we safely ignore it (out of scope for basic mandatory 42)
+    // Si c'est une requête sur un utilisateur (et pas un canal), on ignore gentiment (hors scope)
     if (!target.empty() && target[0] != '#') return;
 
     if (_channels.find(target) == _channels.end()) {
@@ -22,7 +22,7 @@ void Server::handleMode(int fd, std::string args) {
 
     Channel* chan = _channels[target];
 
-    // If no modes are specified, clients want to know current active flags
+    // Si aucun mode n'est spécifié, le client demande la liste des flags actifs
     if (modeString.empty()) {
         std::string activeModes = "+";
         if (chan->getModeI()) activeModes += "i";
@@ -33,48 +33,84 @@ void Server::handleMode(int fd, std::string args) {
         return;
     }
 
-    // Check if the user is allowed to alter settings
+    // Sécurité stricte du sujet : Seuls les opérateurs peuvent modifier les paramètres
     if (!chan->isOperator(fd)) {
         sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + target + " :You're not channel operator\r\n");
         return;
     }
 
+    std::string appliedModes = "";
+    std::string appliedParams = "";
     bool sign = true; // true = '+', false = '-'
+
     for (size_t i = 0; i < modeString.length(); i++) {
         char c = modeString[i];
-        if (c == '+') { sign = true; continue; }
-        if (c == '-') { sign = false; continue; }
+        if (c == '+') { 
+            sign = true; 
+            if (appliedModes.empty() || appliedModes[appliedModes.size() - 1] != '+') appliedModes += "+";
+            continue; 
+        }
+        if (c == '-') { 
+            sign = false; 
+            if (appliedModes.empty() || appliedModes[appliedModes.size() - 1] != '-') appliedModes += "-";
+            continue; 
+        }
 
-        if (c == 'i') chan->setModeI(sign);
-        else if (c == 't') chan->setModeT(sign);
+        std::string param = "";
+
+        if (c == 'i') {
+            chan->setModeI(sign);
+            appliedModes += "i";
+        }
+        else if (c == 't') {
+            chan->setModeT(sign);
+            appliedModes += "t";
+        }
         else if (c == 'k') {
             if (sign) {
                 ss >> param;
-                if (!param.empty()) chan->setKey(param);
+                if (!param.empty()) {
+                    chan->setKey(param);
+                    appliedModes += "k";
+                    appliedParams += " " + param;
+                }
             } else {
                 chan->setKey("");
+                appliedModes += "k";
             }
         }
         else if (c == 'l') {
             if (sign) {
                 ss >> param;
-                if (!param.empty()) chan->setMaxClients(std::atoi(param.c_str()));
+                if (!param.empty()) {
+                    chan->setMaxClients(std::atoi(param.c_str()));
+                    appliedModes += "l";
+                    appliedParams += " " + param;
+                }
             } else {
                 chan->setMaxClients(0);
+                appliedModes += "l";
             }
         }
         else if (c == 'o') {
             ss >> param;
-            Client* tClient = findClientByNick(param);
-            if (tClient && chan->hasClient(tClient)) {
-                if (sign) chan->addOperator(tClient->getFd());
-                else chan->removeOperator(tClient->getFd());
-            } else {
-                sendResponse(fd, "441 " + param + " " + target + " :They aren't on that channel\r\n");
+            if (!param.empty()) {
+                Client* tClient = findClientByNick(param);
+                if (tClient && chan->hasClient(tClient)) {
+                    if (sign) chan->addOperator(tClient->getFd());
+                    else chan->removeOperator(tClient->getFd());
+                    appliedModes += "o";
+                    appliedParams += " " + param;
+                } else {
+                    sendResponse(fd, "441 " + param + " " + target + " :They aren't on that channel\r\n");
+                }
             }
         }
     }
-    // Broadcast the mode update to everyone in the channel
-    std::string updateMsg = ":" + _clients[fd]->getNickname() + " MODE " + target + " " + modeString + (param.empty() ? "" : " " + param) + "\r\n";
-    chan->broadcast(updateMsg);
+
+    // On ne broadcast que si des modes valides ont effectivement été traités
+    if (appliedModes != "+" && appliedModes != "-") {
+        std::string updateMsg = ":" + _clients[fd]->getNickname() + " MODE " + target + " " + appliedModes + appliedParams + "\r\n";
+        chan->broadcast(updateMsg);
+    }
 }
