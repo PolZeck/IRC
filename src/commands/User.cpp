@@ -1,7 +1,6 @@
 #include "Server.hpp"
 
 void Server::handleUser(int fd, std::string args) {
-    // Standard IRC checks for registration flow
     if (!_clients[fd]->isPasswordOk()) {
         sendResponse(fd, "451 :You have not registered (PASS required)\r\n");
         return;
@@ -15,8 +14,9 @@ void Server::handleUser(int fd, std::string args) {
         return;
     }
     
-    // Once USER is received, I consider the client fully registered
-    _clients[fd]->setRegistered(true);
-    std::string nick = _clients[fd]->getNickname();
-    sendResponse(fd, "001 " + nick + " :Welcome to the IRC Network, " + nick + "\r\n");
+    size_t space = args.find(' ');
+    std::string username = (space == std::string::npos) ? args : args.substr(0, space);
+    _clients[fd]->setUsername(username);
+
+    checkRegistration(fd);
 }

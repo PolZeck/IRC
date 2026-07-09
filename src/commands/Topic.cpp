@@ -16,7 +16,6 @@ void Server::handleTopic(int fd, std::string args) {
 
     Channel* chan = _channels[channelName];
 
-    // Scenario 1: Just reading the topic
     if (space == std::string::npos) {
         if (chan->getTopic().empty())
             sendResponse(fd, "331 " + _clients[fd]->getNickname() + " " + channelName + " :No topic is set\r\n");
@@ -25,11 +24,9 @@ void Server::handleTopic(int fd, std::string args) {
         return;
     }
 
-    // Scenario 2: Changing the topic
     std::string newTopic = args.substr(space + 1);
     if (newTopic[0] == ':') newTopic = newTopic.substr(1);
 
-    // I enforce the +t policy here
     if (chan->getModeT() && !chan->isOperator(fd)) {
         sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + channelName + " :You're not channel operator\r\n");
         return;
@@ -37,5 +34,5 @@ void Server::handleTopic(int fd, std::string args) {
 
     chan->setTopic(newTopic);
     std::string msg = ":" + _clients[fd]->getNickname() + " TOPIC " + channelName + " :" + newTopic + "\r\n";
-    chan->broadcast(msg);
+    broadcastToChannel(chan, msg, -1);
 }

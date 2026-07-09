@@ -6,7 +6,6 @@ Channel::~Channel() {}
 
 void Channel::addClient(Client* client) {
     _clients.push_back(client);
-    // Le tout premier qui rejoint le canal devient automatiquement opérateur
     if (_clients.size() == 1) {
         addOperator(client->getFd());
     }
@@ -50,10 +49,3 @@ bool Channel::isInvited(int fd) {
     return std::find(_invitedFds.begin(), _invitedFds.end(), fd) != _invitedFds.end();
 }
 
-void Channel::broadcast(std::string message, int excludeFd) {
-    for (size_t i = 0; i < _clients.size(); i++) {
-        if (_clients[i]->getFd() != excludeFd) {
-            send(_clients[i]->getFd(), message.c_str(), message.length(), 0);
-        }
-    }
-}

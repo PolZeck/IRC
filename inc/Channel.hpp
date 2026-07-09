@@ -56,7 +56,7 @@ class Channel {
         void addInvite(int fd);
         bool isInvited(int fd);
 
-        void broadcast(std::string message, int excludeFd = -1);
+        const std::vector<Client*>& getClients() const { return _clients; }
 };
 
 #endif

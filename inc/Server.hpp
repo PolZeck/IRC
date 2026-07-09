@@ -59,6 +59,10 @@ class Server {
         // Communication and parsing
         void processCommand(int fd, std::string command);
         void sendResponse(int fd, std::string response);
+
+        void checkRegistration(int fd);
+        void broadcastToChannel(Channel* chan, std::string message, int excludeFd);
+
 };
 
 #endif

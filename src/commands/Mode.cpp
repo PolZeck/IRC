@@ -12,7 +12,6 @@ void Server::handleMode(int fd, std::string args) {
     std::string target, modeString;
     ss >> target >> modeString;
 
-    // Si c'est une requête sur un utilisateur (et pas un canal), on ignore gentiment (hors scope)
     if (!target.empty() && target[0] != '#') return;
 
     if (_channels.find(target) == _channels.end()) {
@@ -22,7 +21,6 @@ void Server::handleMode(int fd, std::string args) {
 
     Channel* chan = _channels[target];
 
-    // Si aucun mode n'est spécifié, le client demande la liste des flags actifs
     if (modeString.empty()) {
         std::string activeModes = "+";
         if (chan->getModeI()) activeModes += "i";
@@ -33,7 +31,6 @@ void Server::handleMode(int fd, std::string args) {
         return;
     }
 
-    // Sécurité stricte du sujet : Seuls les opérateurs peuvent modifier les paramètres
     if (!chan->isOperator(fd)) {
         sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + target + " :You're not channel operator\r\n");
         return;
@@ -108,9 +105,8 @@ void Server::handleMode(int fd, std::string args) {
         }
     }
 
-    // On ne broadcast que si des modes valides ont effectivement été traités
     if (appliedModes != "+" && appliedModes != "-") {
         std::string updateMsg = ":" + _clients[fd]->getNickname() + " MODE " + target + " " + appliedModes + appliedParams + "\r\n";
-        chan->broadcast(updateMsg);
+        broadcastToChannel(chan, updateMsg, -1);
     }
 }

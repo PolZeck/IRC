@@ -13,6 +13,8 @@ class Client {
         bool _passwordOk;
         bool _isRegistered;
         std::string _nickname;
+        std::string _username;
+        std::string _writeBuffer;
 
     public:
         // Client(int fd) : _fd(fd) {}
@@ -53,7 +55,23 @@ class Client {
         }
 
         return cmd;
-    }
+        }
+
+        void setUsername(const std::string& username) {
+            _username = username;
+        }
+
+        std::string getUsername() const {
+            return _username;
+        }
+
+        void appendWriteBuffer(const std::string& msg) {
+            _writeBuffer += msg;
+        }
+
+        std::string& getWriteBuffer() {
+            return _writeBuffer;
+        }
 };
 
 #endif

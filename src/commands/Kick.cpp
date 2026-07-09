@@ -18,21 +18,26 @@ void Server::handleKick(int fd, std::string args) {
     size_t space2 = rest.find(' ');
     std::string targetNick = (space2 == std::string::npos) ? rest : rest.substr(0, space2);
 
-    // I check if the channel exists
     if (_channels.find(channelName) == _channels.end()) {
         sendResponse(fd, "403 " + channelName + " :No such channel\r\n");
         return;
     }
 
-    // I use my new utility function to find the victim
+    Channel* chan = _channels[channelName];
+
+    if (!chan->isOperator(fd)) {
+        sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + channelName + " :You're not channel operator\r\n");
+        return;
+    }
+
     Client* target = findClientByNick(targetNick);
-    if (!target || !_channels[channelName]->hasClient(target)) {
+    if (!target || !chan->hasClient(target)) {
         sendResponse(fd, "441 " + targetNick + " " + channelName + " :They aren't on that channel\r\n");
         return;
     }
 
-    // I notify everyone and remove the user
-    std::string kickMsg = ":" + _clients[fd]->getNickname() + " KICK " + channelName + " " + targetNick + " :Kicked by operator\r\n";
-    _channels[channelName]->broadcast(kickMsg);
-    _channels[channelName]->removeClient(target);
+    std::string kickMsg = ":" + _clients[fd]->getNickname() + " KICK " + channelName + " " + targetNick + "\r\n";
+    broadcastToChannel(chan, kickMsg, -1);
+
+    chan->removeClient(target);
 }

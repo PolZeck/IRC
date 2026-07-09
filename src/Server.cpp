@@ -44,17 +44,33 @@ void Server::initCommands() {
 void Server::processCommand(int fd, std::string command) {
     if (command.empty()) return;
 
-    // I split the incoming string into command name and arguments
-    size_t spacePos = command.find(' ');
-    std::string cmdName = command.substr(0, spacePos);
-    std::string args;
+    // 1. On cherche le premier espace OU caractère blanc pour isoler la commande
+    size_t spacePos = command.find_first_of(" \t\r\n");
+    std::string cmdName = (spacePos == std::string::npos) ? command : command.substr(0, spacePos);
+    std::string args = "";
 
-    if (spacePos != std::string::npos)
+    if (spacePos != std::string::npos) {
+        // On récupère tout ce qui suit l'espace
         args = command.substr(spacePos + 1);
-    else
-        args = "";
+        
+        // On retire les espaces inutiles au début des arguments (le "trim")
+        size_t firstNotSpace = args.find_first_not_of(" \t\r\n");
+        if (firstNotSpace != std::string::npos) {
+            args = args.substr(firstNotSpace);
+        } else {
+            args = "";
+        }
+    }
 
-    std::cout << "Client " << fd << " sent: [" << cmdName << "]" << std::endl;
+    // Un petit coup de propre pour enlever un éventuel '\r' ou '\n' résiduel en fin d'arguments
+    size_t lastValid = args.find_last_not_of(" \t\r\n");
+    if (lastValid != std::string::npos) {
+        args = args.substr(0, lastValid + 1);
+    } else if (!args.empty()) {
+        args = "";
+    }
+
+    std::cout << "Client " << fd << " sent command: [" << cmdName << "] with args: [" << args << "]" << std::endl;
 
     if (_commandMap.count(cmdName))
         (this->*_commandMap[cmdName])(fd, args);
@@ -62,9 +78,33 @@ void Server::processCommand(int fd, std::string command) {
         sendResponse(fd, "421 " + cmdName + " :Unknown command\r\n");
 }
 
-void Server::sendResponse(int fd, std::string response)
-{
-    send(fd, response.c_str(), response.length(), 0);
+// Remplacer l'ancienne fonction interdite par celle-ci :
+void Server::sendResponse(int fd, std::string response) {
+    if (_clients.find(fd) != _clients.end()) {
+        // Étape 1 : On ajoute les données dans le buffer d'écriture du client
+        _clients[fd]->appendWriteBuffer(response);
+        
+        // Étape 2 : On cherche le pollfd correspondant pour activer POLLOUT
+        for (size_t i = 0; i < _fds.size(); ++i) {
+            if (_fds[i].fd == fd) {
+                _fds[i].events |= POLLOUT; // On dit à poll() qu'on veut écrire dès que c'est prêt
+                break;
+            }
+        }
+    }
+}
+
+// Fonction utilitaire indispensable pour l'enregistrement (à placer dans Server.cpp)
+void Server::checkRegistration(int fd) {
+    Client* client = _clients[fd];
+    if (!client->isRegistered() && client->isPasswordOk() && 
+        !client->getNickname().empty() && client->getNickname() != "User" && 
+        !client->getUsername().empty()) {
+        
+        client->setRegistered(true);
+        std::string nick = client->getNickname();
+        sendResponse(fd, "001 " + nick + " :Welcome to the IRC Network, " + nick + "\r\n");
+    }
 }
 
 /* ========================================================================== */
@@ -109,6 +149,7 @@ void Server::run()
 {
     while (g_stop == false)
     {
+        // poll() bloque jusqu'à ce qu'un FD soit prêt en lecture (POLLIN) ou en écriture (POLLOUT)
         int pollResult = poll(&_fds[0], _fds.size(), -1);
 
         if (pollResult < 0)
@@ -120,18 +161,61 @@ void Server::run()
 
         for (size_t i = 0; i < _fds.size(); i++)
         {
+            // 1. GESTION DE LA LECTURE (POLLIN)
             if (_fds[i].revents & POLLIN)
             {
                 if (_fds[i].fd == _serverFd)
                 {
+                    // Nouvelle connexion entrante
                     acceptNewClient();
                 }
                 else
                 {
+                    // Données reçues d'un client
                     if (receiveData(_fds[i].fd) == false)
                     {
+                        // Le client a été déconnecté/supprimé dans receiveData,
+                        // la taille de _fds a diminué, on ajuste l'index et on passe au FD suivant.
                         i--;
+                        continue;
                     }
+                }
+            }
+
+            // 2. GESTION DE L'ÉCRITURE SÉCURISÉE (POLLOUT)
+            // On ne rentre ici que si poll() confirme que le tampon système du client est prêt à recevoir
+            if (_fds[i].revents & POLLOUT)
+            {
+                int clientFd = _fds[i].fd;
+                
+                // On récupère le buffer d'écriture propre à ce client
+                // (Assure-toi d'avoir implémenté getWriteBuffer() dans ta classe Client)
+                std::string& writeBuffer = _clients[clientFd]->getWriteBuffer();
+                
+                if (!writeBuffer.empty())
+                {
+                    // C'est le SEUL endroit du code où send() est autorisé à s'exécuter
+                    ssize_t bytesSent = send(clientFd, writeBuffer.c_str(), writeBuffer.length(), 0);
+                    
+                    if (bytesSent > 0)
+                    {
+                        // On retire du buffer ce qui a été envoyé avec succès
+                        writeBuffer = writeBuffer.substr(bytesSent);
+                    }
+                    else if (bytesSent < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                    {
+                        // Erreur d'écriture critique (ex: déconnexion brutale) -> Nettoyage du client
+                        removeClient(clientFd);
+                        i--;
+                        continue;
+                    }
+                }
+                
+                // Si le buffer est totalement vide, on désactive le flag POLLOUT 
+                // pour éviter que poll() ne tourne en boucle inutilement
+                if (writeBuffer.empty())
+                {
+                    _fds[i].events &= ~POLLOUT;
                 }
             }
         }
@@ -243,4 +327,14 @@ void Server::removeClient(int fd) {
     delete client;
     close(fd);
     std::cout << "Client FD " << fd << " removed safely." << std::endl;
+}
+
+void Server::broadcastToChannel(Channel* chan, std::string message, int excludeFd) {
+    if (!chan) return;
+    const std::vector<Client*>& clients = chan->getClients();
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i]->getFd() != excludeFd) {
+            sendResponse(clients[i]->getFd(), message); // Utilise TA fonction sécurisée !
+        }
+    }
 }
