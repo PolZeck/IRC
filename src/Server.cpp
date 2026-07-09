@@ -214,7 +214,13 @@ bool Server::receiveData(int fd)
     memset(buffer, 0, sizeof(buffer));
     int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
-    if (bytes <= 0)
+    if (bytes < 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+            removeClient(fd);
+        return false;
+    }
+    else if (bytes == 0)
     {
         removeClient(fd);
         return false;
@@ -223,26 +229,34 @@ bool Server::receiveData(int fd)
     buffer[bytes] = '\0';
     _clients[fd]->appendBuffer(buffer);
 
-    while (_clients.count(fd) && _clients[fd]->hasCommand())
-    {
-        std::string fullCommand = _clients[fd]->getBuffer();
-        size_t pos = fullCommand.find('\n');
-        if (pos == std::string::npos) break;
+    // On récupère une COPIE du buffer actuel
+    std::string clientBuffer = _clients[fd]->getBuffer(); 
+    size_t pos;
 
-        std::string command = fullCommand.substr(0, pos);
+    while ((pos = clientBuffer.find('\n')) != std::string::npos)
+    {
+        std::string command = clientBuffer.substr(0, pos);
 
         if (!command.empty() && command[command.size() - 1] == '\r')
             command.erase(command.size() - 1);
 
+        // On met à jour notre copie locale du buffer pour le reste de la boucle
+        clientBuffer = clientBuffer.substr(pos + 1);
+        
+        // On réapplique cette modification directement dans l'objet Client
+        _clients[fd]->clearBuffer();
+        _clients[fd]->appendBuffer(clientBuffer);
+
         processCommand(fd, command);
 
-        if (!_clients.count(fd))
+        if (_clients.find(fd) == _clients.end())
             return false;
-
-        std::string remaining = fullCommand.substr(pos + 1);
-        _clients[fd]->clearBuffer();
-        _clients[fd]->appendBuffer(remaining);
+            
+        // Si le buffer du client a reçu de nouvelles données pendant processCommand,
+        // on synchronise notre copie locale pour le prochain tour de boucle
+        clientBuffer = _clients[fd]->getBuffer();
     }
+
     return true;
 }
 
