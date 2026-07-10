@@ -1,3 +1,6 @@
+/*
+ * This file implements the MODE command to manage channel settings and flags.
+ */
 #include "Server.hpp"
 #include <sstream>
 #include <cstdlib>
@@ -21,6 +24,7 @@ void Server::handleMode(int fd, std::string args) {
 
     Channel* chan = _channels[target];
 
+    // If no mode string provided, return the 324 RPL (Channel Mode List)
     if (modeString.empty()) {
         std::string activeModes = "+";
         if (chan->getModeI()) activeModes += "i";
@@ -31,6 +35,7 @@ void Server::handleMode(int fd, std::string args) {
         return;
     }
 
+    // Only operators can change channel modes
     if (!chan->isOperator(fd)) {
         sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + target + " :You're not channel operator\r\n");
         return;
@@ -38,74 +43,41 @@ void Server::handleMode(int fd, std::string args) {
 
     std::string appliedModes = "";
     std::string appliedParams = "";
-    bool sign = true; // true = '+', false = '-'
+    bool sign = true; // State toggle: '+' (true) or '-' (false)
 
     for (size_t i = 0; i < modeString.length(); i++) {
         char c = modeString[i];
-        if (c == '+') { 
-            sign = true; 
-            if (appliedModes.empty() || appliedModes[appliedModes.size() - 1] != '+') appliedModes += "+";
-            continue; 
-        }
-        if (c == '-') { 
-            sign = false; 
-            if (appliedModes.empty() || appliedModes[appliedModes.size() - 1] != '-') appliedModes += "-";
-            continue; 
-        }
+        if (c == '+') { sign = true; continue; } // Switch mode sign
+        if (c == '-') { sign = false; continue; }
 
         std::string param = "";
-
-        if (c == 'i') {
-            chan->setModeI(sign);
-            appliedModes += "i";
-        }
-        else if (c == 't') {
-            chan->setModeT(sign);
-            appliedModes += "t";
-        }
+        // Process standard modes (i, t, k, l, o)
+        if (c == 'i') { chan->setModeI(sign); appliedModes += (sign ? "+i" : "-i"); }
+        else if (c == 't') { chan->setModeT(sign); appliedModes += (sign ? "+t" : "-t"); }
         else if (c == 'k') {
-            if (sign) {
-                ss >> param;
-                if (!param.empty()) {
-                    chan->setKey(param);
-                    appliedModes += "k";
-                    appliedParams += " " + param;
-                }
-            } else {
-                chan->setKey("");
-                appliedModes += "k";
-            }
+            if (sign) { ss >> param; if (!param.empty()) chan->setKey(param); }
+            else { chan->setKey(""); }
+            appliedModes += (sign ? "+k" : "-k");
         }
         else if (c == 'l') {
-            if (sign) {
-                ss >> param;
-                if (!param.empty()) {
-                    chan->setMaxClients(std::atoi(param.c_str()));
-                    appliedModes += "l";
-                    appliedParams += " " + param;
-                }
-            } else {
-                chan->setMaxClients(0);
-                appliedModes += "l";
-            }
+            if (sign) { ss >> param; if (!param.empty()) chan->setMaxClients(std::atoi(param.c_str())); }
+            else { chan->setMaxClients(0); }
+            appliedModes += (sign ? "+l" : "-l");
         }
         else if (c == 'o') {
             ss >> param;
             if (!param.empty()) {
                 Client* tClient = findClientByNick(param);
                 if (tClient && chan->hasClient(tClient)) {
-                    if (sign) chan->addOperator(tClient->getFd());
-                    else chan->removeOperator(tClient->getFd());
-                    appliedModes += "o";
+                    if (sign) chan->addOperator(tClient->getFd()); else chan->removeOperator(tClient->getFd());
+                    appliedModes += (sign ? "+o" : "-o");
                     appliedParams += " " + param;
-                } else {
-                    sendResponse(fd, "441 " + param + " " + target + " :They aren't on that channel\r\n");
                 }
             }
         }
     }
-
-    if (appliedModes != "+" && appliedModes != "-") {
+    // Broadcast the successful mode change to the channel members
+    if (!appliedModes.empty()) {
         std::string updateMsg = ":" + _clients[fd]->getNickname() + " MODE " + target + " " + appliedModes + appliedParams + "\r\n";
         broadcastToChannel(chan, updateMsg, -1);
     }

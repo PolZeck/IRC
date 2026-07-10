@@ -1,3 +1,6 @@
+/*
+ * This file handles the USER command, used to define the user's real name identity.
+ */
 #include "Server.hpp"
 
 void Server::handleUser(int fd, std::string args) {
@@ -10,6 +13,7 @@ void Server::handleUser(int fd, std::string args) {
         return;
     }
 
+    // Enforce RFC 2812: USER requires 4 parameters (<user> <mode> <unused> <realname>)
     size_t space1 = args.find(' ');
     size_t space2 = (space1 != std::string::npos) ? args.find(' ', space1 + 1) : std::string::npos;
     size_t space3 = (space2 != std::string::npos) ? args.find(' ', space2 + 1) : std::string::npos;
@@ -19,16 +23,15 @@ void Server::handleUser(int fd, std::string args) {
         return;
     }
 
+    // Extract realname (everything after the 3rd space, cleaning colon)
     std::string username = args.substr(0, space1);
-    
     std::string realname = args.substr(space3 + 1);
     
     if (!realname.empty() && realname[0] == ':') {
         realname = realname.substr(1);
     }
 
+    // Apply username and finish registration check
     _clients[fd]->setUsername(username);
-    
-
     checkRegistration(fd);
 }

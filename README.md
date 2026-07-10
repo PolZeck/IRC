@@ -175,3 +175,11 @@ valgrind --leak-check=full \
          --track-fds=yes \
          ./ircserv 6667 pass
 ```
+
+
+# Documentation
+
+We used AI as a peer-to-peer system. We configured it this way: we explained our design, our vision, and our understanding of the project and its components to it.
+It allowed us to raise questions and make changes, accompanied by explanations, during our interactions with it.
+
+We used as reference : RFC 2812 : https://www.rfc-editor.org/info/rfc2812/

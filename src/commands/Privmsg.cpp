@@ -1,3 +1,6 @@
+/*
+ * This file implements the PRIVMSG command for private messaging or channel broadcasts.
+ */
 #include "Server.hpp"
 
 void Server::handlePrivmsg(int fd, std::string args) {
@@ -6,6 +9,7 @@ void Server::handlePrivmsg(int fd, std::string args) {
         return;
     }
 
+    // Parse the target and the message text (separated by ':')
     size_t sep = args.find(':');
     if (args.empty()) {
         sendResponse(fd, "411 :No recipient given (PRIVMSG)\r\n");
@@ -19,27 +23,23 @@ void Server::handlePrivmsg(int fd, std::string args) {
     else
         target = "";
 
-    if (target.empty()) {
-        sendResponse(fd, "411 :No recipient given (PRIVMSG)\r\n");
+    if (target.empty() || sep == std::string::npos) {
+        sendResponse(fd, (target.empty() ? "411 :No recipient given" : "412 :No text to send") + "\r\n");
         return;
     }
 
-    if (sep == std::string::npos) {
-        sendResponse(fd, "412 :No text to send\r\n");
-        return;
-    }
-
-    std::string text = args.substr(sep); // Conserve le ':' pour le protocole
+    std::string text = args.substr(sep); // Keep the colon for RFC compliance
     std::string sender = _clients[fd]->getNickname();
     std::string fullMsg = ":" + sender + " PRIVMSG " + target + " " + text + "\r\n";
 
+    // Route to channel if target starts with '#', otherwise perform private chat
     if (target[0] == '#') {
         if (_channels.count(target)) {
             if (!_channels[target]->hasClient(_clients[fd])) {
                 sendResponse(fd, "404 " + target + " :Cannot send to channel\r\n");
                 return;
             }
-            broadcastToChannel(_channels[target], fullMsg, fd); // fd en paramètre pour exclure l'émetteur
+            broadcastToChannel(_channels[target], fullMsg, fd); // Exclude sender from broadcast
         } else {
             sendResponse(fd, "403 " + target + " :No such channel\r\n");
         }

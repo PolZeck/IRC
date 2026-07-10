@@ -1,3 +1,6 @@
+/*
+ * This file implements the TOPIC command to set or view channel topics.
+ */
 #include "Server.hpp"
 
 void Server::handleTopic(int fd, std::string args) {
@@ -16,6 +19,7 @@ void Server::handleTopic(int fd, std::string args) {
 
     Channel* chan = _channels[channelName];
 
+    // No topic provided: Return current channel topic
     if (space == std::string::npos) {
         if (chan->getTopic().empty())
             sendResponse(fd, "331 " + _clients[fd]->getNickname() + " " + channelName + " :No topic is set\r\n");
@@ -24,6 +28,7 @@ void Server::handleTopic(int fd, std::string args) {
         return;
     }
 
+    // Setting new topic: Check permissions if +t mode is active
     std::string newTopic = args.substr(space + 1);
     if (newTopic[0] == ':') newTopic = newTopic.substr(1);
 
@@ -32,6 +37,7 @@ void Server::handleTopic(int fd, std::string args) {
         return;
     }
 
+    // Update topic and inform the channel
     chan->setTopic(newTopic);
     std::string msg = ":" + _clients[fd]->getNickname() + " TOPIC " + channelName + " :" + newTopic + "\r\n";
     broadcastToChannel(chan, msg, -1);
