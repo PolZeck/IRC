@@ -28,7 +28,7 @@ $(NAME): $(OBJ)
 
 $(OBJ_DIR)/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Iinc -MMD -MP -c $< -o $@
+	$(CXX) $(CXXFLAGS) -Iinc -MMD -MP -c $< -o $@
 
 # Create object directory if it doesn't exist
 $(OBJ_DIR):

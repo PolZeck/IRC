@@ -1,10 +1,10 @@
-_42 School Project — by pledieu, lcosson_
+_This project has been created as part of the 42 curriculum by pledieu, lcosson_
 
-# ft_irc
+## ft_irc
 
 A lightweight Internet Relay Chat (IRC) server written in C++98 as part of the 42 curriculum.
 
-## Overview
+# Description
 
 `ft_irc` is a custom IRC server implementing the core features of the IRC protocol using non-blocking sockets and `poll()`.
 
@@ -22,7 +22,7 @@ The server is compatible with standard IRC clients such as HexChat, irssi, or ne
 
 ---
 
-# Features
+## Features
 
 * Multiple client connections
 * Non-blocking sockets
@@ -36,7 +36,7 @@ The server is compatible with standard IRC clients such as HexChat, irssi, or ne
 
 ---
 
-# Implemented Commands
+## Implemented Commands
 
 | Command | Description              |
 | ------- | ------------------------ |
@@ -51,7 +51,7 @@ The server is compatible with standard IRC clients such as HexChat, irssi, or ne
 
 ---
 
-# Channel Modes
+## Channel Modes
 
 | Mode | Description                   |
 | ---- | ----------------------------- |
@@ -63,7 +63,7 @@ The server is compatible with standard IRC clients such as HexChat, irssi, or ne
 
 ---
 
-# Compilation
+# Instructions
 
 ```bash
 make
@@ -77,7 +77,7 @@ This will generate:
 
 ---
 
-# Usage
+## Usage
 
 ```bash
 ./ircserv <port> <password>
@@ -91,7 +91,7 @@ Example:
 
 ---
 
-# Testing with Netcat
+## Testing with Netcat
 
 Open a second terminal:
 
@@ -124,7 +124,7 @@ PRIVMSG #42 :Hello everyone
 
 ---
 
-# Testing with HexChat
+## Testing with HexChat
 
 You can also connect using an IRC client such as HexChat.
 
@@ -136,7 +136,7 @@ Connection settings:
 
 ---
 
-# Project Structure
+## Project Structure
 
 ```text
 includes/
@@ -151,7 +151,7 @@ Makefile
 
 ---
 
-# Technical Concepts
+## Technical Concepts
 
 This project covers:
 
@@ -165,7 +165,7 @@ This project covers:
 
 ---
 
-# Memory Management
+## Memory Management
 
 The server was tested with Valgrind:
 
@@ -177,7 +177,7 @@ valgrind --leak-check=full \
 ```
 
 
-# Documentation
+# Resources
 
 We used AI as a peer-to-peer system. We configured it this way: we explained our design, our vision, and our understanding of the project and its components to it.
 It allowed us to raise questions and make changes, accompanied by explanations, during our interactions with it.
