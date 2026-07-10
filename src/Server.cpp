@@ -229,7 +229,6 @@ bool Server::receiveData(int fd)
     buffer[bytes] = '\0';
     _clients[fd]->appendBuffer(buffer);
 
-    // On récupère une COPIE du buffer actuel
     std::string clientBuffer = _clients[fd]->getBuffer(); 
     size_t pos;
 
@@ -240,10 +239,8 @@ bool Server::receiveData(int fd)
         if (!command.empty() && command[command.size() - 1] == '\r')
             command.erase(command.size() - 1);
 
-        // On met à jour notre copie locale du buffer pour le reste de la boucle
         clientBuffer = clientBuffer.substr(pos + 1);
         
-        // On réapplique cette modification directement dans l'objet Client
         _clients[fd]->clearBuffer();
         _clients[fd]->appendBuffer(clientBuffer);
 
@@ -252,8 +249,6 @@ bool Server::receiveData(int fd)
         if (_clients.find(fd) == _clients.end())
             return false;
             
-        // Si le buffer du client a reçu de nouvelles données pendant processCommand,
-        // on synchronise notre copie locale pour le prochain tour de boucle
         clientBuffer = _clients[fd]->getBuffer();
     }
 
