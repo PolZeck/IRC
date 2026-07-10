@@ -24,7 +24,7 @@ void Server::handlePrivmsg(int fd, std::string args) {
         target = "";
 
     if (target.empty() || sep == std::string::npos) {
-        sendResponse(fd, (target.empty() ? "411 :No recipient given" : "412 :No text to send") + "\r\n");
+        sendResponse(fd, std::string(target.empty() ? "411 :No recipient given" : "412 :No text to send") + "\r\n");
         return;
     }
 
