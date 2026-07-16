@@ -1,5 +1,4 @@
 #include "Server.hpp"
-#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -134,7 +133,7 @@ void Server::init()
 }
 
 /* ========================================================================== */
-/* NETWORK ENGINE (VERSION SÉCURISÉE)                                         */
+/* NETWORK ENGINE (SÉCURISÉ SANS ERRNO SUR RECV/SEND)                         */
 /* ========================================================================== */
 
 void Server::run()
@@ -182,7 +181,7 @@ void Server::run()
                     {
                         writeBuffer = writeBuffer.substr(bytesSent);
                     }
-                    else if (bytesSent < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                    else if (bytesSent <= 0)
                     {
                         removeClient(clientFd);
                         i--;
@@ -214,13 +213,7 @@ bool Server::receiveData(int fd)
     memset(buffer, 0, sizeof(buffer));
     int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
-    if (bytes < 0)
-    {
-        if (errno != EAGAIN && errno != EWOULDBLOCK)
-            removeClient(fd);
-        return false;
-    }
-    else if (bytes == 0)
+    if (bytes <= 0)
     {
         removeClient(fd);
         return false;
