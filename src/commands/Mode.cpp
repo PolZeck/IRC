@@ -6,8 +6,10 @@
 #include <cstdlib>
 
 void Server::handleMode(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+
     if (!_clients[fd]->isRegistered()) {
-        sendResponse(fd, "451 :You have not registered\r\n");
+        sendResponse(fd, ":localhost 451 " + nick + " :You have not registered\r\n");
         return;
     }
 
@@ -18,40 +20,37 @@ void Server::handleMode(int fd, std::string args) {
     if (!target.empty() && target[0] != '#') return;
 
     if (_channels.find(target) == _channels.end()) {
-        sendResponse(fd, "403 " + target + " :No such channel\r\n");
+        sendResponse(fd, ":localhost 403 " + nick + " " + target + " :No such channel\r\n");
         return;
     }
 
     Channel* chan = _channels[target];
 
-    // If no mode string provided, return the 324 RPL (Channel Mode List)
     if (modeString.empty()) {
         std::string activeModes = "+";
         if (chan->getModeI()) activeModes += "i";
         if (chan->getModeT()) activeModes += "t";
         if (!chan->getKey().empty()) activeModes += "k";
         if (chan->getMaxClients() > 0) activeModes += "l";
-        sendResponse(fd, "324 " + _clients[fd]->getNickname() + " " + target + " " + activeModes + "\r\n");
+        sendResponse(fd, ":localhost 324 " + nick + " " + target + " " + activeModes + "\r\n");
         return;
     }
 
-    // Only operators can change channel modes
     if (!chan->isOperator(fd)) {
-        sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + target + " :You're not channel operator\r\n");
+        sendResponse(fd, ":localhost 482 " + nick + " " + target + " :You're not channel operator\r\n");
         return;
     }
 
     std::string appliedModes = "";
     std::string appliedParams = "";
-    bool sign = true; // State toggle: '+' (true) or '-' (false)
+    bool sign = true;
 
     for (size_t i = 0; i < modeString.length(); i++) {
         char c = modeString[i];
-        if (c == '+') { sign = true; continue; } // Switch mode sign
+        if (c == '+') { sign = true; continue; }
         if (c == '-') { sign = false; continue; }
 
         std::string param = "";
-        // Process standard modes (i, t, k, l, o)
         if (c == 'i') { chan->setModeI(sign); appliedModes += (sign ? "+i" : "-i"); }
         else if (c == 't') { chan->setModeT(sign); appliedModes += (sign ? "+t" : "-t"); }
         else if (c == 'k') {
@@ -76,9 +75,10 @@ void Server::handleMode(int fd, std::string args) {
             }
         }
     }
-    // Broadcast the successful mode change to the channel members
+
     if (!appliedModes.empty()) {
-        std::string updateMsg = ":" + _clients[fd]->getNickname() + " MODE " + target + " " + appliedModes + appliedParams + "\r\n";
+        std::string userMask = nick + "!" + _clients[fd]->getUsername() + "@localhost";
+        std::string updateMsg = ":" + userMask + " MODE " + target + " " + appliedModes + appliedParams + "\r\n";
         broadcastToChannel(chan, updateMsg, -1);
     }
 }

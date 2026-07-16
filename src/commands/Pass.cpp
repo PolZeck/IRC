@@ -4,9 +4,11 @@
 #include "Server.hpp"
 
 void Server::handlePass(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+
     // PASS cannot be used after successful registration
     if (_clients[fd]->isRegistered()) {
-        sendResponse(fd, "462 :Unauthorized command (already registered)\r\n");
+        sendResponse(fd, ":localhost 462 " + nick + " :Unauthorized command (already registered)\r\n");
         return;
     }
 
@@ -14,6 +16,6 @@ void Server::handlePass(int fd, std::string args) {
     if (args == _password) {
         _clients[fd]->setPasswordOk(true);
     } else {
-        sendResponse(fd, "464 :Password incorrect\r\n");
+        sendResponse(fd, ":localhost 464 " + nick + " :Password incorrect\r\n");
     }
 }

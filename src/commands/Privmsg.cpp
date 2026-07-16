@@ -4,15 +4,17 @@
 #include "Server.hpp"
 
 void Server::handlePrivmsg(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+
     if (!_clients[fd]->isRegistered()) {
-        sendResponse(fd, "451 :You have not registered\r\n");
+        sendResponse(fd, ":localhost 451 " + nick + " :You have not registered\r\n");
         return;
     }
 
     // Parse the target and the message text (separated by ':')
     size_t sep = args.find(':');
     if (args.empty()) {
-        sendResponse(fd, "411 :No recipient given (PRIVMSG)\r\n");
+        sendResponse(fd, ":localhost 411 " + nick + " :No recipient given (PRIVMSG)\r\n");
         return;
     }
 
@@ -24,32 +26,35 @@ void Server::handlePrivmsg(int fd, std::string args) {
         target = "";
 
     if (target.empty() || sep == std::string::npos) {
-        sendResponse(fd, std::string(target.empty() ? "411 :No recipient given" : "412 :No text to send") + "\r\n");
+        if (target.empty()) {
+            sendResponse(fd, ":localhost 411 " + nick + " :No recipient given\r\n");
+        } else {
+            sendResponse(fd, ":localhost 412 " + nick + " :No text to send\r\n");
+        }
         return;
     }
 
     std::string text = args.substr(sep); // Keep the colon for RFC compliance
-    std::string sender = _clients[fd]->getNickname();
-    std::string fullMsg = ":" + sender + " PRIVMSG " + target + " " + text + "\r\n";
+    std::string userMask = nick + "!" + _clients[fd]->getUsername() + "@localhost";
+    std::string fullMsg = ":" + userMask + " PRIVMSG " + target + " " + text + "\r\n";
 
     // Route to channel if target starts with '#', otherwise perform private chat
     if (target[0] == '#') {
         if (_channels.count(target)) {
             if (!_channels[target]->hasClient(_clients[fd])) {
-                sendResponse(fd, "404 " + target + " :Cannot send to channel\r\n");
+                sendResponse(fd, ":localhost 404 " + nick + " " + target + " :Cannot send to channel\r\n");
                 return;
             }
             broadcastToChannel(_channels[target], fullMsg, fd); // Exclude sender from broadcast
         } else {
-            sendResponse(fd, "403 " + target + " :No such channel\r\n");
+            sendResponse(fd, ":localhost 403 " + nick + " " + target + " :No such channel\r\n");
         }
-    }
-    else {
+    } else {
         Client* targetClient = findClientByNick(target);
         if (targetClient) {
             sendResponse(targetClient->getFd(), fullMsg);
         } else {
-            sendResponse(fd, "401 " + target + " :No such nick/channel\r\n");
+            sendResponse(fd, ":localhost 401 " + nick + " " + target + " :No such nick/channel\r\n");
         }
     }
 }

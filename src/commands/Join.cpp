@@ -5,8 +5,10 @@
 #include <sstream>
 
 void Server::handleJoin(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+
     if (!_clients[fd]->isRegistered()) {
-        sendResponse(fd, "451 :You have not registered\r\n");
+        sendResponse(fd, ":localhost 451 " + nick + " :You have not registered\r\n");
         return;
     }
 
@@ -14,13 +16,11 @@ void Server::handleJoin(int fd, std::string args) {
     std::string channelName, providedKey;
     ss >> channelName >> providedKey;
 
-    // Standard RFC: Channels must start with '#' or '&'
     if (channelName.empty() || channelName[0] != '#') {
-        sendResponse(fd, "461 JOIN :Not enough parameters or invalid channel name\r\n");
+        sendResponse(fd, ":localhost 461 " + nick + " JOIN :Not enough parameters or invalid channel name\r\n");
         return;
     }
 
-    // Create channel if it doesn't exist; the joiner becomes the first operator
     bool isCreator = false;
     if (_channels.find(channelName) == _channels.end()) {
         _channels[channelName] = new Channel(channelName);
@@ -29,32 +29,45 @@ void Server::handleJoin(int fd, std::string args) {
 
     Channel* chan = _channels[channelName];
 
-    // Mode +i: Check if the user is in the invite-list
     if (chan->getModeI() && !chan->isInvited(fd)) {
-        sendResponse(fd, "473 " + _clients[fd]->getNickname() + " " + channelName + " :Cannot join channel (+i)\r\n");
+        sendResponse(fd, ":localhost 473 " + nick + " " + channelName + " :Cannot join channel (+i)\r\n");
         return;
     }
 
-    // Mode +k: Check if the provided key matches the channel password
     if (!chan->getKey().empty() && chan->getKey() != providedKey) {
-        sendResponse(fd, "475 " + _clients[fd]->getNickname() + " " + channelName + " :Cannot join channel (+k)\r\n");
+        sendResponse(fd, ":localhost 475 " + nick + " " + channelName + " :Cannot join channel (+k)\r\n");
         return;
     }
 
-    // Mode +l: Check if channel capacity has been reached
     if (chan->getMaxClients() > 0 && chan->getClientCount() >= chan->getMaxClients()) {
-        sendResponse(fd, "471 " + _clients[fd]->getNickname() + " " + channelName + " :Cannot join channel (+l)\r\n");
+        sendResponse(fd, ":localhost 471 " + nick + " " + channelName + " :Cannot join channel (+l)\r\n");
         return;
     }
 
     chan->addClient(_clients[fd]);
 
-    // Give operator rights to the creator
     if (isCreator) {
         chan->addOperator(fd);
     }
 
-    // Notify all members of the channel about the new arrival
-    std::string joinMsg = ":" + _clients[fd]->getNickname() + " JOIN " + channelName + "\r\n";
+    // Message standard
+    std::string userMask = nick + "!" + _clients[fd]->getUsername() + "@localhost";
+    std::string joinMsg = ":" + userMask + " JOIN " + channelName + "\r\n";
     broadcastToChannel(chan, joinMsg, -1);
+
+    // Mandatory NAMES list response after joining
+    std::string listMsg = "";
+    const std::vector<Client*>& channelClients = chan->getClients();
+    for (size_t i = 0; i < channelClients.size(); i++) {
+        if (chan->isOperator(channelClients[i]->getFd())) {
+            listMsg += "@";
+        }
+        listMsg += channelClients[i]->getNickname() + " ";
+    }
+    if (!listMsg.empty() && listMsg[listMsg.size() - 1] == ' ') {
+        listMsg.erase(listMsg.size() - 1);
+    }
+
+    sendResponse(fd, ":localhost 353 " + nick + " = " + channelName + " :" + listMsg + "\r\n");
+    sendResponse(fd, ":localhost 366 " + nick + " " + channelName + " :End of NAMES list\r\n");
 }

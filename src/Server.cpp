@@ -69,8 +69,10 @@ void Server::processCommand(int fd, std::string command) {
 
     if (_commandMap.count(cmdName))
         (this->*_commandMap[cmdName])(fd, args);
-    else
-        sendResponse(fd, "421 " + cmdName + " :Unknown command\r\n");
+    else {
+        std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+        sendResponse(fd, ":localhost 421 " + nick + " " + cmdName + " :Unknown command\r\n");
+    }
 }
 
 void Server::sendResponse(int fd, std::string response) {
@@ -94,7 +96,7 @@ void Server::checkRegistration(int fd) {
         
         client->setRegistered(true);
         std::string nick = client->getNickname();
-        sendResponse(fd, "001 " + nick + " :Welcome to the IRC Network, " + nick + "\r\n");
+        sendResponse(fd, ":localhost 001 " + nick + " :Welcome to the IRC Network, " + nick + "\r\n");
     }
 }
 
@@ -131,10 +133,6 @@ void Server::init()
 
     _fds.push_back(serverPollFd);
 }
-
-/* ========================================================================== */
-/* NETWORK ENGINE (SÉCURISÉ SANS ERRNO SUR RECV/SEND)                         */
-/* ========================================================================== */
 
 void Server::run()
 {
@@ -200,12 +198,12 @@ void Server::run()
 
 void Server::handlePing(int fd, std::string args) {
     if (args.empty()) {
-        sendResponse(fd, "461 PING :Not enough parameters\r\n");
+        std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+        sendResponse(fd, ":localhost 461 " + nick + " PING :Not enough parameters\r\n");
         return;
     }
-    sendResponse(fd, "PONG " + args + "\r\n");
+    sendResponse(fd, ":localhost PONG localhost :" + args + "\r\n");
 }
-
 
 bool Server::receiveData(int fd)
 {

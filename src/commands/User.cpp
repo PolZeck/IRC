@@ -4,12 +4,14 @@
 #include "Server.hpp"
 
 void Server::handleUser(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+
     if (!_clients[fd]->isPasswordOk()) {
-        sendResponse(fd, "451 :You have not registered (PASS required)\r\n");
+        sendResponse(fd, ":localhost 451 " + nick + " :You have not registered (PASS required)\r\n");
         return;
     }
     if (_clients[fd]->isRegistered()) {
-        sendResponse(fd, "462 :Unauthorized command (already registered)\r\n");
+        sendResponse(fd, ":localhost 462 " + nick + " :Unauthorized command (already registered)\r\n");
         return;
     }
 
@@ -19,19 +21,21 @@ void Server::handleUser(int fd, std::string args) {
     size_t space3 = (space2 != std::string::npos) ? args.find(' ', space2 + 1) : std::string::npos;
 
     if (space1 == std::string::npos || space2 == std::string::npos || space3 == std::string::npos) {
-        sendResponse(fd, "461 USER :Not enough parameters\r\n");
+        sendResponse(fd, ":localhost 461 " + nick + " USER :Not enough parameters\r\n");
         return;
     }
 
     // Extract realname (everything after the 3rd space, cleaning colon)
     std::string username = args.substr(0, space1);
     std::string realname = args.substr(space3 + 1);
-    
     if (!realname.empty() && realname[0] == ':') {
         realname = realname.substr(1);
     }
 
-    // Apply username and finish registration check
     _clients[fd]->setUsername(username);
+    _clients[fd]->setRealname(realname);
+    std::cout << "Client " << fd << " set username to: " << username << " and realname to: " << realname << std::endl;
+
+    // Check if the client is now fully registered
     checkRegistration(fd);
 }

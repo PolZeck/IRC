@@ -4,11 +4,13 @@
 #include "Server.hpp"
 
 void Server::handleQuit(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "User" : _clients[fd]->getNickname();
     std::string reason = args.empty() ? "Leaving" : args;
     if (reason[0] == ':') reason = reason.substr(1);
 
-    // Notify all channels the user was participating in
-    std::string quitMsg = ":" + _clients[fd]->getNickname() + " QUIT :Quit: " + reason + "\r\n";
+    // Notify all channels the user was participating in using full hostmask
+    std::string userMask = nick + "!" + _clients[fd]->getUsername() + "@localhost";
+    std::string quitMsg = ":" + userMask + " QUIT :Quit: " + reason + "\r\n";
 
     std::map<std::string, Channel*>::iterator it = _channels.begin();
     while (it != _channels.end()) {

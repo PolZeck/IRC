@@ -4,15 +4,16 @@
 #include "Server.hpp"
 
 void Server::handleKick(int fd, std::string args) {
+    std::string nick = _clients[fd]->getNickname().empty() ? "*" : _clients[fd]->getNickname();
+
     if (!_clients[fd]->isRegistered()) {
-        sendResponse(fd, "451 :You have not registered\r\n");
+        sendResponse(fd, ":localhost 451 " + nick + " :You have not registered\r\n");
         return;
     }
 
-    // Split logic: channel name + target nickname
     size_t space1 = args.find(' ');
     if (space1 == std::string::npos) {
-        sendResponse(fd, "461 KICK :Not enough parameters\r\n");
+        sendResponse(fd, ":localhost 461 " + nick + " KICK :Not enough parameters\r\n");
         return;
     }
 
@@ -23,29 +24,35 @@ void Server::handleKick(int fd, std::string args) {
     std::string targetNick = (space2 == std::string::npos) ? rest : rest.substr(0, space2);
 
     if (_channels.find(channelName) == _channels.end()) {
-        sendResponse(fd, "403 " + channelName + " :No such channel\r\n");
+        sendResponse(fd, ":localhost 403 " + nick + " " + channelName + " :No such channel\r\n");
         return;
     }
 
     Channel* chan = _channels[channelName];
 
-    // Security: Only operators are allowed to KICK members
     if (!chan->isOperator(fd)) {
-        sendResponse(fd, "482 " + _clients[fd]->getNickname() + " " + channelName + " :You're not channel operator\r\n");
+        sendResponse(fd, ":localhost 482 " + nick + " " + channelName + " :You're not channel operator\r\n");
         return;
     }
 
-    // Ensure target exists and is currently in the channel
     Client* target = findClientByNick(targetNick);
     if (!target || !chan->hasClient(target)) {
-        sendResponse(fd, "441 " + targetNick + " " + channelName + " :They aren't on that channel\r\n");
+        sendResponse(fd, ":localhost 441 " + nick + " " + targetNick + " " + channelName + " :They aren't on that channel\r\n");
         return;
     }
 
-    // Announce the kick to everyone in the channel
-    std::string kickMsg = ":" + _clients[fd]->getNickname() + " KICK " + channelName + " " + targetNick + "\r\n";
+    // Handle optional reason for the kick, defaulting to "Kicked by operator" if none is provided
+    std::string reason = "Kicked by operator";
+    if (space2 != std::string::npos) {
+        reason = rest.substr(space2 + 1);
+        if (!reason.empty() && reason[0] == ':') {
+            reason = reason.substr(1);
+        }
+    }
+
+    std::string userMask = nick + "!" + _clients[fd]->getUsername() + "@localhost";
+    std::string kickMsg = ":" + userMask + " KICK " + channelName + " " + targetNick + " :" + reason + "\r\n";
     broadcastToChannel(chan, kickMsg, -1);
 
-    // Perform the removal
     chan->removeClient(target);
 }
