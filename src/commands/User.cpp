@@ -25,7 +25,7 @@ void Server::handleUser(int fd, std::string args) {
         return;
     }
 
-    // Extract realname (everything after the 3rd space, cleaning colon)
+    // Extract username and realname (everything after the 3rd space, cleaning colon)
     std::string username = args.substr(0, space1);
     std::string realname = args.substr(space3 + 1);
     if (!realname.empty() && realname[0] == ':') {
@@ -33,8 +33,7 @@ void Server::handleUser(int fd, std::string args) {
     }
 
     _clients[fd]->setUsername(username);
-    _clients[fd]->setRealname(realname);
-    std::cout << "Client " << fd << " set username to: " << username << " and realname to: " << realname << std::endl;
+    std::cout << "Client " << fd << " set username to: " << username << std::endl;
 
     // Check if the client is now fully registered
     checkRegistration(fd);
